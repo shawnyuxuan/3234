@@ -40,6 +40,9 @@ def client_loop(sock: socket.socket):
             case "/exit":
                 sock.send("/exit".encode())
                 response = sock.recv(1024).decode()
+                if response.startswith("4002"):
+                    print("Invalid command.")
+                    continue
                 if response.startswith("4001"): # Should be fine
                     return
                 
@@ -50,6 +53,10 @@ def client_loop(sock: socket.socket):
                 sock.send(command.encode())
                 
                 response = sock.recv(1024).decode()
+                if response.startswith("4002"):
+                    print("Invalid command.")
+                    continue
+
                 if response.startswith("3013"):
                     print("The room is full. Try another room.")
                     # Go to next iteration directly.
@@ -71,8 +78,13 @@ def client_loop(sock: socket.socket):
                     sock.send(f"/guess {guess}".encode())
                     
                     # Wait for result from the server.
+                    game_result = None
                     while True:
                         response = sock.recv(1024).decode()
+                        if response.startswith("4002"):
+                            print("Invalid command.")
+                            continue
+
                         if response.startswith("3021") or\
                             response.startswith("3022") or\
                             response.startswith("3023"):
@@ -95,6 +107,10 @@ def client_loop(sock: socket.socket):
                     continue
                 sock.send("/list".encode())
                 response = sock.recv(1024).decode()
+                if response.startswith("4002"):
+                    print("Invalid command.")
+                    continue
+
                 room_num = int(response.split()[1])
                 numbers = response.split()[2:]
                 for i in range(room_num):
@@ -104,7 +120,10 @@ def client_loop(sock: socket.socket):
                 # It should be discarded at the first place, 
                 # though the requirement is for the server to respond with 4002.
                 sock.send(cmd.encode())
-                sock.recv(1024) 
+                response = sock.recv(1024).decode()
+                if response.startswith("4002"):
+                    print("Invalid command.")
+                    continue
                  
 if __name__ == "__main__":
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
