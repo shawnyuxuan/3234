@@ -6,7 +6,7 @@ DEFAULT_PORT = 9999
 MAX_RECURSION_DEPTH = 5
 
 state = "OUT" #"HALL", "WAIT", "GAMING"
-depth = 0
+
 def client_loop(sock: socket.socket):
     state = "OUT"
     """User Authentication"""
@@ -23,7 +23,6 @@ def client_loop(sock: socket.socket):
         
         if response.startswith("1001"):
             print("Authentication successful! Bringing you into the hall...")
-            state = "HALL"
             break
         elif response.startswith("1002"):
             print("Authentication failed.")
@@ -32,13 +31,14 @@ def client_loop(sock: socket.socket):
     
     """Playing stage"""
     while True:
+        state = "HALL"
         command = input("Command: ")
         arguments = command.split()
         if arguments == []: continue
         cmd = arguments[0]
         match cmd:
             case "/exit":
-                sock.send("/exit")
+                sock.send("/exit".encode())
                 response = sock.recv(1024).decode()
                 if response.startswith("4001"): # Should be fine
                     return
@@ -87,24 +87,24 @@ def client_loop(sock: socket.socket):
                         case "3023":
                             print("The result is a tie.")
                         case _:
-                            print("?")            
-                # Return to hall
-                state = "HALL"   
+                            print("?")
                 
             case "/list":
                 if state != "HALL":
                     print("Invalid command.")
                     continue
-                sock.send("/list")
+                sock.send("/list".encode())
                 response = sock.recv(1024).decode()
-                numbers = response.split()[1:]
-                for i in range(len(numbers)):
+                room_num = int(response.split()[1])
+                numbers = response.split()[2:]
+                for i in range(room_num):
                     print(f"Room {i+1}: {numbers[i]} players")
             
             case _:
                 # It should be discarded at the first place, 
                 # though the requirement is for the server to respond with 4002.
-                sock.send(cmd)   
+                sock.send(cmd.encode())
+                sock.recv(1024) 
                  
 if __name__ == "__main__":
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
