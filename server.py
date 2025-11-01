@@ -28,6 +28,7 @@ rooms = [Room(i+1) for i in range(ROOM_COUNT)] # room id, count, user1, user2
 # TODO dict thread safety????
 def calculate_game_result(user, room_no):
     room = rooms[room_no-1]
+    print(room.user_guess)
     user1, user2 = room.user_guess
 
     # handle offline cases, if both offline, both are false
@@ -61,6 +62,7 @@ def calculate_game_result(user, room_no):
 def play_game(user, connectionSocket, room_no):
     # game result is determined here, and returned
     room = rooms[room_no-1]
+    print(room.user_guess)
     while True:
         line = connectionSocket.recv(1024)
         if not line:
@@ -93,6 +95,7 @@ def play_game(user, connectionSocket, room_no):
 
 def clear_room(room_no, current_user):
     room = rooms[room_no-1]
+    room.barrier.wait()
     del room.user_guess[current_user]
     users[current_user] = 0
     with room.user_count_lock:
@@ -105,6 +108,7 @@ def clear_room(room_no, current_user):
 
 
 def handle_result(result, connectionSocket, current_user, room_no):
+    # send result + close room
     room = rooms[room_no-1]
 
     if result == "tie":
@@ -247,6 +251,7 @@ def handle_client(client):
                     room.event.wait()
                 else:
                     room.event.set()
+                print(room.user_guess)
                 connectionSocket.send("3012 Game started. Please guess true or false".encode())
                 result = play_game(current_user, connectionSocket, room_no)
                 handle_result(result, connectionSocket, current_user, room_no)
