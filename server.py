@@ -247,7 +247,6 @@ def handle_client(client):
                 continue
             else:
                 room = rooms[room_no-1]
-                should_wait = False
                 with room.user_count_lock:
                     if room.user_count == 0:
                         # 3011 wait
@@ -269,11 +268,8 @@ def handle_client(client):
                         if send_message(connectionSocket, "3013 The room is full") is None:
                             pass
                         continue
-                if should_wait:
-                    room.event.wait()
-                else:
-                    room.event.set()
-                    room.event.clear()
+
+                room.barrier.wait()
                 print(room.user_guess)
                 if send_message(connectionSocket, "3012 Game started. Please guess true or false") is None:
                     pass
