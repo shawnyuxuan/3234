@@ -18,6 +18,7 @@ class Room:
 
 
 users = {}
+#TODO: 处理client意外退出的情况：更新users
 user_passwd = {}
 threads = []
 ROOM_COUNT = 10
@@ -149,6 +150,11 @@ def login(connectionSocket):
             connectionSocket.send("4002 Unrecognized message".encode())
             continue
         command, user, passwd = line
+
+        if user in users:
+            connectionSocket.send("1002 Authentication failed.".encode())
+            continue
+
         if command != "/login":
             connectionSocket.send("4002 Unrecognized message".encode())
             continue
@@ -269,7 +275,7 @@ def main ():
                 break
             user, passwd = line.split(":")
             user_passwd[user] = passwd
-    print(user_passwd)
+    # print(user_passwd)
 
     serverSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     serverSock.bind(("", server_port))
