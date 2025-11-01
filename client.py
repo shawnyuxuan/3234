@@ -26,6 +26,8 @@ def client_loop(sock: socket.socket):
             break
         elif response.startswith("1002"):
             print("Authentication failed.")
+        elif response.startswith("1003"):
+            print("You have logged in elsewhere.")
         else:
             print("Internal error.")
     
@@ -83,6 +85,8 @@ def client_loop(sock: socket.socket):
                         response = sock.recv(1024).decode()
                         if response.startswith("4002"):
                             print("Invalid command.")
+                            guess = input("Please take a guess (true/false): ")
+                            sock.send(f"/guess {guess}".encode())
                             continue
 
                         if response.startswith("3021") or\

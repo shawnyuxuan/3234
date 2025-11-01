@@ -151,8 +151,7 @@ def login(connectionSocket):
             continue
 
         if user in users:
-            if send_message(connectionSocket, "You have already logged in") is None:
-                break
+            connectionSocket.send("1003 You have already logged in".encode())
             continue
 
         if user in user_passwd and passwd == user_passwd[user]:
