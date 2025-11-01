@@ -278,7 +278,7 @@ def handle_client(client):
                 if send_message(connectionSocket, "3012 Game started. Please guess true or false") is None:
                     break
                 result = play_game(current_user, connectionSocket, room_no)
-                if handle_result(result, connectionSocket, current_user, room_no) == "user_force_quit":
+                if handle_result(result, connectionSocket, current_user, room_no) == "user force quit":
                     break
                 continue  # daoshihouzaishuoba
 
