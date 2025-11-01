@@ -10,7 +10,8 @@ class Room:
         self.user_count = 0
         self.user_guess = {}
         self.event = threading.Event()
-        self.lock = threading.Lock()
+        self.user_count_lock = threading.Lock()
+        self.game_lock = threading.Lock()
         self.received_guesses = 0
         self.server_answer = None
         self.barrier = threading.Barrier(2)
@@ -24,9 +25,10 @@ threads = []
 ROOM_COUNT = 10
 rooms = [Room(i+1) for i in range(ROOM_COUNT)] # room id, count, user1, user2
 
-
+# TODO dict thread safety????
 def calculate_game_result(user, room_no):
     room = rooms[room_no-1]
+    print(room.user_guess)
     user1, user2 = room.user_guess
 
     # handle offline cases, if both offline, both are false
@@ -60,6 +62,7 @@ def calculate_game_result(user, room_no):
 def play_game(user, connectionSocket, room_no):
     # game result is determined here, and returned
     room = rooms[room_no-1]
+    print(room.user_guess)
     while True:
         line = connectionSocket.recv(1024)
         if not line:
@@ -81,7 +84,7 @@ def play_game(user, connectionSocket, room_no):
             break
             # return False
 
-    with room.lock:
+    with room.game_lock:
         room.received_guesses += 1
         # for backward compatibility
 
@@ -92,17 +95,20 @@ def play_game(user, connectionSocket, room_no):
 
 def clear_room(room_no, current_user):
     room = rooms[room_no-1]
+    room.barrier.wait()
     del room.user_guess[current_user]
     users[current_user] = 0
-    room.received_guesses -= 1
-    room.user_count -= 1
-    room.server_answer = None
+    with room.user_count_lock:
+        room.received_guesses = 0
+        room.user_count = 0
+        room.server_answer = None
 
 
 # def send_message():
 
 
 def handle_result(result, connectionSocket, current_user, room_no):
+    # send result + close room
     room = rooms[room_no-1]
 
     if result == "tie":
@@ -188,7 +194,11 @@ def handle_client(client):
                 continue
 
             message = f"3001 {ROOM_COUNT} "
-            room_info = [str(rooms[i].user_count) for i in range(ROOM_COUNT)]
+            room_info = []
+            for i in range(ROOM_COUNT):
+                room = rooms[i]
+                with room.user_count_lock:
+                    room_info.append(str(rooms[i].user_count))
             message += " ".join(room_info)
             connectionSocket.send(message.encode())
         elif line.startswith("/enter"):
@@ -217,33 +227,36 @@ def handle_client(client):
                 continue
             else:
                 room = rooms[room_no-1]
-                with room.lock:
+                should_wait = False
+                with room.user_count_lock:
                     if room.user_count == 0:
                         # 3011 wait
                         users[current_user] = room_no
                         room.user_count += 1
                         room.user_guess[current_user] = None
                         connectionSocket.send("3011 Wait".encode())
-                        room.event.wait()
-                        connectionSocket.send("3012 Game started. Please guess true or false".encode())
-                        result = play_game(current_user, connectionSocket, room_no)
-                        handle_result(result, connectionSocket, current_user, room_no)
-                        continue # daoshihouzaishuoba
+                        should_wait = True
                     elif room.user_count == 1:
                         # 3012
                         users[current_user] = room_no
                         room.user_count += 1
                         room.user_guess[current_user] = None
-                        room.event.set()
-                        connectionSocket.send("3012 Game started. Please guess true or false".encode())
-                        play_game(current_user, connectionSocket, room_no)
-                        handle_result(result, connectionSocket, current_user, room_no)
-                        continue
+                        should_wait = False
 
                     elif room.user_count == 2:
                         # 3013
                         connectionSocket.send("3013 The room is full".encode())
                         continue
+                if should_wait:
+                    room.event.wait()
+                else:
+                    room.event.set()
+                print(room.user_guess)
+                connectionSocket.send("3012 Game started. Please guess true or false".encode())
+                result = play_game(current_user, connectionSocket, room_no)
+                handle_result(result, connectionSocket, current_user, room_no)
+                continue  # daoshihouzaishuoba
+
 
         elif line.strip() == "/exit":
             connectionSocket.send("4001 Bye Bye".encode())
