@@ -26,6 +26,8 @@ def client_loop(sock: socket.socket):
             break
         elif response.startswith("1002"):
             print("Authentication failed.")
+        elif response.startswith("1003"):
+            print("You have logged in elsewhere.")
         else:
             print("Internal error.")
     
