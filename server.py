@@ -273,6 +273,7 @@ def handle_client(client):
                     room.event.wait()
                 else:
                     room.event.set()
+                    room.event.clear()
                 print(room.user_guess)
                 if send_message(connectionSocket, "3012 Game started. Please guess true or false") is None:
                     pass
