@@ -47,14 +47,19 @@ def calculate_game_result(user, room_no):
         if room.user_guess[user1] == "user_offline" and room.user_guess[user2] == "user_offline":
             return False
 
+    print(room.user_guess[user])
     # handle normal case
     if room.user_guess[user1] == room.user_guess[user2]:
         return "tie"
     else:
-        room.server_answer = random.choice(["true", "false"])
+        with room.game_lock:
+            if room.server_answer is None:
+                room.server_answer = random.choice(["true", "false"])
         if room.user_guess[user] == room.server_answer:
+            print(user, "guesses", room.user_guess[user], "answer is", room.server_answer, "return true")
             return True
         else:
+            print(user, "guesses", room.user_guess[user], "answer is", room.server_answer, "return false")
             return False
 
 
