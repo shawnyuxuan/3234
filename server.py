@@ -151,13 +151,14 @@ def login(connectionSocket):
             continue
         command, user, passwd = line
 
-        if user in users:
-            connectionSocket.send("1002 Authentication failed.".encode())
-            continue
-
         if command != "/login":
             connectionSocket.send("4002 Unrecognized message".encode())
             continue
+
+        if user in users:
+            connectionSocket.send("You have already logged in".encode())
+            continue
+
         if user in user_passwd and passwd == user_passwd[user]:
             connectionSocket.send("1001 Authentication successful".encode())
             users[user] = 0 # room id that a user is in
