@@ -47,14 +47,19 @@ def calculate_game_result(user, room_no):
         if room.user_guess[user1] == "user_offline" and room.user_guess[user2] == "user_offline":
             return False
 
+    print(room.user_guess[user])
     # handle normal case
     if room.user_guess[user1] == room.user_guess[user2]:
         return "tie"
     else:
-        room.server_answer = random.choice(["true", "false"])
+        with room.game_lock:
+            if room.server_answer is None:
+                room.server_answer = random.choice(["true", "false"])
         if room.user_guess[user] == room.server_answer:
+            print(user, "guesses", room.user_guess[user], "answer is", room.server_answer, "return true")
             return True
         else:
+            print(user, "guesses", room.user_guess[user], "answer is", room.server_answer, "return false")
             return False
 
 
@@ -64,16 +69,16 @@ def play_game(user, connectionSocket, room_no):
     room = rooms[room_no-1]
     print(room.user_guess)
     while True:
-        line = connectionSocket.recv(1024)
-        if not line:
+        line = receive_message(connectionSocket)
+        if line is None:
             room.user_guess[user] = "user_offline"
             break
             # return False
-        line = line.decode()
+        # line = line.decode()
         try:
             line = line.split()
             if len(line) != 2 or line[0] != "/guess" or line[1] not in {"true", "false"}:
-                connectionSocket.send("4002 Unrecognized message")
+                connectionSocket.send("4002 Unrecognized message".encode())
                 continue
             room.user_guess[user] = line[1]
             break
@@ -112,53 +117,37 @@ def handle_result(result, connectionSocket, current_user, room_no):
     room = rooms[room_no-1]
 
     if result == "tie":
-        try:
-            clear_room(room_no, current_user)
-            connectionSocket.send("3023 The result is a tie".encode())
-        except OSError:
-            # TODO
-            print("user exitted")
-            connectionSocket.close()
-            del users[current_user]
+        clear_room(room_no, current_user)
+        if send_message(connectionSocket, "3023 The result is a tie") is None:
+            return "user force quit"
 
     else:
         if result:
-            try:
-                clear_room(room_no, current_user)
-                connectionSocket.send("3021 You are the winner".encode())
-            except OSError:
-                # TODO
-                print("user exitted")
-                connectionSocket.close()
-                del users[current_user]
+            clear_room(room_no, current_user)
+            if send_message(connectionSocket, "3021 You are the winner") is None:
+                return "user force quit"
 
         else:
-            try:
-                clear_room(room_no, current_user)
-                connectionSocket.send("3022 You lost this game".encode())
-            except OSError:
-                # TODO
-                print("user exitted")
-                connectionSocket.close()
-                del users[current_user]
+            clear_room(room_no, current_user)
+            if send_message(connectionSocket, "3022 You lost this game") is None:
+                return "user force quit"
 
 
 def login(connectionSocket):
     while True:
-        line = connectionSocket.recv(1024)
-        if not line:
-            # client closed the socket
-            connectionSocket.close()
-            return None
-        line = line.decode()
-        line = line.split(" ")
+        line = receive_message(connectionSocket)
+        if line is None:
+            break
+        line = line.split()
         if len(line) != 3:
-            connectionSocket.send("4002 Unrecognized message".encode())
+            if send_message(connectionSocket, "4002 Unrecognized message") is None:
+                break
             continue
         command, user, passwd = line
 
         if command != "/login":
-            connectionSocket.send("4002 Unrecognized message".encode())
+            if send_message(connectionSocket, "4002 Unrecognized message") is None:
+                break
             continue
 
         if user in users:
@@ -166,31 +155,56 @@ def login(connectionSocket):
             continue
 
         if user in user_passwd and passwd == user_passwd[user]:
-            connectionSocket.send("1001 Authentication successful".encode())
+            if send_message(connectionSocket, "1001 Authentication successful") is None:
+                break
             users[user] = 0 # room id that a user is in
             return user
         else:
-            connectionSocket.send("1002 Authentication failed".encode())
+            if send_message(connectionSocket, "1002 Authentication failed") is None:
+                break
+    return None
 
+
+
+def receive_message(connectionSocket) -> None| str:
+    try:
+        line = connectionSocket.recv(1024)
+        if not line:
+            connectionSocket.close()
+            return None # client closed the loop using close()
+        return line.decode()
+
+    except OSError:
+        # client force close
+        return None
+
+
+def send_message(connectionSocket, message):
+    try:
+        connectionSocket.send(message.encode())
+        return True
+    except OSError:
+        return None
 
 
 def handle_client(client):
     connectionSocket, addr = client
 
     result = login(connectionSocket)
-    if result is None: return # client closed the socket
+    if result is None:
+        connectionSocket.close()
+        return # client closed the socket
     current_user = result
 
     while True:
-        line = connectionSocket.recv(1024)
-        if not line:
-            connectionSocket.close()
-            break # client closed the loop
-        line = line.decode()
+        line = receive_message(connectionSocket)
+        if line is None:
+            break
 
         if line.startswith("/list"):
             if line != "/list":
-                connectionSocket.send("4002 Unrecognized message".encode())
+                if send_message(connectionSocket, "4002 Unrecognized message") is None:
+                    break
                 continue
 
             message = f"3001 {ROOM_COUNT} "
@@ -200,30 +214,36 @@ def handle_client(client):
                 with room.user_count_lock:
                     room_info.append(str(rooms[i].user_count))
             message += " ".join(room_info)
-            connectionSocket.send(message.encode())
+            if send_message(connectionSocket, message) is None:
+                break
         elif line.startswith("/enter"):
             line = line.split(" ")
             if len(line) != 2:
-                connectionSocket.send("4002 Unrecognized message".encode())
+                if send_message(connectionSocket, "4002 Unrecognized message") is None:
+                    break
                 continue
             elif line[0] != "/enter":
-                connectionSocket.send("4002 Unrecognized message".encode())
+                if send_message(connectionSocket, "4002 Unrecognized message") is None:
+                    break
                 continue
             else:
                 if users[current_user] != 0:
-                    connectionSocket.send(f"You are already in room {users[current_user]}".encode())
+                    if send_message(connectionSocket, f"You are already in room {users[current_user]}") is None:
+                        break
                     continue
 
             room_no = line[1]
             try:
                 room_no = int(room_no)
             except:
-                connectionSocket.send("4002 Unrecognized message".encode())
+                if send_message(connectionSocket, "4002 Unrecognized message") is None:
+                    break
                 continue
 
 
             if room_no > ROOM_COUNT or room_no < 1:
-                connectionSocket.send("4002 Unrecognized message".encode())
+                if send_message(connectionSocket, "4002 Unrecognized message") is None:
+                    break
                 continue
             else:
                 room = rooms[room_no-1]
@@ -234,7 +254,8 @@ def handle_client(client):
                         users[current_user] = room_no
                         room.user_count += 1
                         room.user_guess[current_user] = None
-                        connectionSocket.send("3011 Wait".encode())
+                        if send_message(connectionSocket, "3011 Wait") is None:
+                            break
                         should_wait = True
                     elif room.user_count == 1:
                         # 3012
@@ -245,28 +266,37 @@ def handle_client(client):
 
                     elif room.user_count == 2:
                         # 3013
-                        connectionSocket.send("3013 The room is full".encode())
+                        if send_message(connectionSocket, "3013 The room is full") is None:
+                            break
                         continue
                 if should_wait:
                     room.event.wait()
                 else:
                     room.event.set()
                 print(room.user_guess)
-                connectionSocket.send("3012 Game started. Please guess true or false".encode())
+                if send_message(connectionSocket, "3012 Game started. Please guess true or false") is None:
+                    break
                 result = play_game(current_user, connectionSocket, room_no)
-                handle_result(result, connectionSocket, current_user, room_no)
+                if handle_result(result, connectionSocket, current_user, room_no) == "user force quit":
+                    break
                 continue  # daoshihouzaishuoba
 
 
         elif line.strip() == "/exit":
-            connectionSocket.send("4001 Bye Bye".encode())
+            if send_message(connectionSocket, "4001 Bye Bye") is None:
+                break
             if current_user in users:
                 del users[current_user]
             connectionSocket.close()
             return
         else:
-            connectionSocket.send("4002 Unrecognized message".encode())
+            if send_message(connectionSocket, "4002 Unrecognized message") is None:
+                break
 
+    connectionSocket.close()
+    if current_user in users:
+        # because there is no double login, this is thread safe (one thread per user)
+        del users[current_user]
 
 
 def main ():
