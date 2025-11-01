@@ -217,32 +217,33 @@ def handle_client(client):
                 continue
             else:
                 room = rooms[room_no-1]
-                if room.user_count == 0:
-                    # 3011 wait
-                    users[current_user] = room_no
-                    room.user_count += 1
-                    room.user_guess[current_user] = None
-                    connectionSocket.send("3011 Wait".encode())
-                    room.event.wait()
-                    connectionSocket.send("3012 Game started. Please guess true or false".encode())
-                    result = play_game(current_user, connectionSocket, room_no)
-                    handle_result(result, connectionSocket, current_user, room_no)
-                    continue # daoshihouzaishuoba
-                elif room.user_count == 1:
-                    # 3012
-                    users[current_user] = room_no
-                    room.user_count += 1
-                    room.user_guess[current_user] = None
-                    room.event.set()
-                    connectionSocket.send("3012 Game started. Please guess true or false".encode())
-                    play_game(current_user, connectionSocket, room_no)
-                    handle_result(result, connectionSocket, current_user, room_no)
-                    continue
+                with room.lock:
+                    if room.user_count == 0:
+                        # 3011 wait
+                        users[current_user] = room_no
+                        room.user_count += 1
+                        room.user_guess[current_user] = None
+                        connectionSocket.send("3011 Wait".encode())
+                        room.event.wait()
+                        connectionSocket.send("3012 Game started. Please guess true or false".encode())
+                        result = play_game(current_user, connectionSocket, room_no)
+                        handle_result(result, connectionSocket, current_user, room_no)
+                        continue # daoshihouzaishuoba
+                    elif room.user_count == 1:
+                        # 3012
+                        users[current_user] = room_no
+                        room.user_count += 1
+                        room.user_guess[current_user] = None
+                        room.event.set()
+                        connectionSocket.send("3012 Game started. Please guess true or false".encode())
+                        play_game(current_user, connectionSocket, room_no)
+                        handle_result(result, connectionSocket, current_user, room_no)
+                        continue
 
-                elif room.user_count == 2:
-                    # 3013
-                    connectionSocket.send("3013 The room is full".encode())
-                    continue
+                    elif room.user_count == 2:
+                        # 3013
+                        connectionSocket.send("3013 The room is full".encode())
+                        continue
 
         elif line.strip() == "/exit":
             connectionSocket.send("4001 Bye Bye".encode())
