@@ -242,7 +242,10 @@ def handle_client(client):
             if current_user in users:
                 del users[current_user]
             connectionSocket.close()
-            break
+            return
+        else:
+            connectionSocket.send("4002 Unrecognized message".encode())
+
 
 
 def main ():
