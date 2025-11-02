@@ -173,7 +173,8 @@ def receive_message(connectionSocket) -> None| str:
             connectionSocket.close()
             return None # client closed the loop using close()
         return line.decode()
-
+    except socket.timeout:
+        return "timeout"
     except OSError:
         # client force close
         return None
@@ -255,13 +256,11 @@ def handle_client(client):
                         room.user_guess[current_user] = None
                         if send_message(connectionSocket, "3011 Wait") is None:
                             pass
-                        should_wait = True
                     elif room.user_count == 1:
                         # 3012
                         users[current_user] = room_no
                         room.user_count += 1
                         room.user_guess[current_user] = None
-                        should_wait = False
 
                     elif room.user_count == 2:
                         # 3013
@@ -269,7 +268,23 @@ def handle_client(client):
                             pass
                         continue
 
-                room.barrier.wait()
+                original_timeout = connectionSocket.gettimeout()
+                connectionSocket.settimeout(5.0)
+                is_exit = False
+                while True:
+                    line = receive_message(connectionSocket)
+                    if line is None:
+                        with room.user_count_lock:
+                            room.user_count -= 1
+                            del room.user_guess[current_user]
+                        is_exit = True
+                        break
+                    with room.user_count_lock:
+                        if room.user_count == 2:
+                            break
+                connectionSocket.settimeout(original_timeout)
+                if is_exit:
+                    break
                 print(room.user_guess)
                 if send_message(connectionSocket, "3012 Game started. Please guess true or false") is None:
                     pass
