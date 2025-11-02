@@ -86,8 +86,9 @@ def play_game(user, connectionSocket, room_no):
         except OSError:
             # socket closed
             room.user_guess[user] = "user_offline"
-            break
-            # return False
+            # Directly calls the calculate_game_result
+            calculate_game_result(user,room_no)
+            # break
 
     with room.game_lock:
         room.received_guesses += 1
