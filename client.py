@@ -4,7 +4,6 @@ import sys
 DEFAULT_SERVER_IP = "localhost"
 DEFAULT_PORT = 9999
 MAX_RECURSION_DEPTH = 5
-TIMEOUT=5
 
 state = "OUT" #"HALL", "WAIT", "GAMING"
 
@@ -78,20 +77,11 @@ def client_loop(sock: socket.socket):
                 if response.startswith("3012"):
                     state = "GAMING"
                     guess = input("Game started! Please take a guess (true/false): ")
-                    import time
-                    stime = time.time()
-                    while True:
-                        response = sock.recv(1024).decode()
-                        if response.startswith("9999"):
-                            game_result = '3021'
-                            break
-                        if time.time() - stime >= TIMEOUT:
-                            break
                     sock.send(f"/guess {guess}".encode())
                     
                     # Wait for result from the server.
                     game_result = None
-                    while True and not game_result: # Only executes when game_result is empty
+                    while True:
                         response = sock.recv(1024).decode()
                         if response.startswith("4002"):
                             print("Invalid command.")
